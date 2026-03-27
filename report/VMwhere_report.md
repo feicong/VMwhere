@@ -51,7 +51,7 @@ flowchart LR
 - Anti-Disassembly: LLVM pass designed to insert specially crafted bytes that confuse disassemblers and decompilers. This prevents these tools from generating accurate assembly listing and higher level psuedo code (decompilation)
 
 - Runtime Anti-Debug: 
-  - Function wrapping: Using the `--wrap` compiler flag, we intercept calls to standard functions like `main` and `printf`. This allows us to insert anti-debugging logic and obfuscate syscalls.
+  - Function wrapping: Using the `--wrap` compiler flag, we intercept calls to standard functions l21https://www.21verses.xyz/2025/01/10/Control_flow_flattening/ike `main` and `printf`. This allows us to insert anti-debugging logic and obfuscate syscalls.
   - Custom Syscall Obfuscation: Instead of making direct syscalls, we define custom syscalls with incorrect argument ordering and non-standard syscall numbers. This makes it difficult for debuggers to trace the program's execution.
   - Parent-Child Process with ptrace Monitoring: The parent process acts as a "syscall translator" using ptrace, while the child process runs the actual program logic but makes obfuscated syscalls. This adds an additional layer of complexity for reverse engineers.
 
@@ -91,7 +91,7 @@ Based on http://ac.inf.elte.hu/Vol_030_2009/003.pdf
 
 This llvm based pass implements the control flow flattening algorithm. The basic idea is to encompass all the blocks as cases within a switch statement (or a switch like construct) and replicate the original control flow using a dispatch variable that controls which block will be executed next. This control variable can be modified at the end of each case to control the next case to be executed. 
 
-I have also written a blog post on the algorithm and implementation over at https://21verses.blog/2025/01/10/post/
+I have also written a blog post on the algorithm and implementation over at https://www.21verses.xyz/2025/01/10/Control_flow_flattening/
 
 The source code for this can be found in `flatten.cpp`
 
