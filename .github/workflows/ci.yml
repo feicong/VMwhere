@@ -67,6 +67,28 @@ jobs:
             New-Item -ItemType Junction -Path "C:\LLVM" -Target "C:\Program Files\LLVM"
           }
           Add-Content -Path $env:GITHUB_PATH -Value "C:\LLVM\bin"
+
+          # The Chocolatey LLVM package ships only binaries; the LLVM C++ API
+          # development headers (e.g. llvm/IR/PassManager.h) are not included in
+          # the Windows installer.  Fetch them with a minimal sparse clone so we
+          # don't have to download the full ~400 MB release tarball.
+          if (-not (Test-Path "C:\Program Files\LLVM\include\llvm\IR\PassManager.h")) {
+            Write-Host "LLVM C++ API headers not found – fetching from source..."
+            $rawVer  = & "C:\Program Files\LLVM\bin\clang.exe" --version 2>&1
+            $llvmVer = ([regex]'(\d+\.\d+\.\d+)').Match($rawVer).Groups[1].Value
+            Write-Host "Detected LLVM version: $llvmVer"
+            git clone --depth=1 --filter=blob:none --sparse `
+              --branch "llvmorg-${llvmVer}" `
+              https://github.com/llvm/llvm-project.git `
+              "$env:TEMP\llvm-src"
+            Push-Location "$env:TEMP\llvm-src"
+            git sparse-checkout set llvm/include
+            Pop-Location
+            Copy-Item -Recurse -Force "$env:TEMP\llvm-src\llvm\include\*" `
+              "C:\Program Files\LLVM\include\"
+            Write-Host "LLVM C++ API headers installed."
+          }
+
           Add-Content -Path $env:GITHUB_ENV  -Value "LLVM_INC=C:/LLVM/include"
 
       - name: Build (Linux)
