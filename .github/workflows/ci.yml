@@ -1,0 +1,136 @@
+# Copyright (c) 2025-2026 fei_cong(https://github.com/feicong/VMwhere)
+
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload artifacts to latest release
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux
+            runs_on: ubuntu-24.04
+          - label: macos
+            runs_on: macos-15
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang llvm llvm-dev build-essential
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          make all
+
+      - name: Build passes (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # macOS: build LLVM passes only (hooks/static binaries require Linux-specific features)
+          make passes
+
+      - name: Package artifacts (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -cJf VMwhere-linux-x86_64.tar.xz passes/ hooks/ build/
+
+      - name: Package artifacts (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -cJf "VMwhere-macos-$(uname -m).tar.xz" passes/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.label }}-build
+          path: VMwhere-*.*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to latest release
+    if: ${{ inputs.upload == true }}
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Update latest tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f latest "${{ github.sha }}"
+          git push origin refs/tags/latest --force
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build
+          body: |
+            Automated build from commit `${{ github.sha }}` on branch `${{ github.ref_name }}`.
+
+            ### Artifacts
+            | File | Platform | Contents |
+            |------|----------|----------|
+            | `VMwhere-linux-x86_64.tar.xz` | Linux x86_64 | LLVM passes (.so), hooks (.o), binaries |
+            | `VMwhere-macos-*.tar.xz` | macOS (x86_64/arm64) | LLVM passes (.so) |
+            ### Usage
+            See [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md) for build and usage instructions.
+          files: release-assets/*
+          prerelease: true
+          make_latest: true
