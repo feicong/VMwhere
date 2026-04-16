@@ -100,7 +100,7 @@ jobs:
           fi
           for f in "${srcs[@]}"; do
             name=$(basename "$f" .cpp)
-            clang++ -shared -O2 "-I${LLVM_INC}" "$f" -o "passes/${name}.dll"
+            clang++ -shared -O2 "-I${LLVM_INC}" -L"C:/LLVM/lib" -lLLVM "$f" -o "passes/${name}.dll"
           done
 
       - name: Package artifacts (Linux)
