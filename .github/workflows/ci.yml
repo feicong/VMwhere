@@ -61,7 +61,13 @@ jobs:
         shell: pwsh
         run: |
           choco install llvm --yes --no-progress
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\LLVM\bin"
+          # Create a junction without spaces to work around MSYS2/Git Bash argument
+          # quoting issues when passing paths containing spaces to native Windows programs.
+          if (-not (Test-Path "C:\LLVM")) {
+            New-Item -ItemType Junction -Path "C:\LLVM" -Target "C:\Program Files\LLVM"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\LLVM\bin"
+          Add-Content -Path $env:GITHUB_ENV  -Value "LLVM_INC=C:/LLVM/include"
 
       - name: Build (Linux)
         if: runner.os == 'Linux'
@@ -84,8 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           # Windows: build LLVM passes as DLLs.
-          # clang++ from the LLVM installation automatically finds its own headers.
-          LLVM_INC="C:/Program Files/LLVM/include"
+          # LLVM_INC is set by the install step to a space-free path (C:/LLVM/include).
           mkdir -p passes
           shopt -s nullglob
           srcs=(src/passes/*.cpp)
@@ -95,7 +100,7 @@ jobs:
           fi
           for f in "${srcs[@]}"; do
             name=$(basename "$f" .cpp)
-            clang++ -shared -O2 -I"${LLVM_INC}" "$f" -o "passes/${name}.dll"
+            clang++ -shared -O2 "-I${LLVM_INC}" "$f" -o "passes/${name}.dll"
           done
 
       - name: Package artifacts (Linux)
